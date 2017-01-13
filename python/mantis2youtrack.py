@@ -4,6 +4,7 @@ import urllib2
 from youtrack.connection import Connection
 from mantis.mantisClient import MantisClient
 from youtrack import *
+from youtrack2youtrack import period_to_minutes
 import sys
 import mantis
 import mantis.defaultMantis
@@ -148,6 +149,8 @@ def to_yt_issue(mantis_issue, project_id, target):
     for key in mantis_issue.keys():
         field_name = get_yt_field_name(key, target, project_id)
         if field_name is None:
+            continue
+        elif field_name in mantis.IGNORED_FIELDS:
             continue
         field_type = get_yt_field_type(field_name, target)
         if field_type is None and field_name not in youtrack.EXISTING_FIELDS:
@@ -430,8 +433,11 @@ def mantis2youtrack(target_url, target_login, target_pass, mantis_db_name, manti
             after += max_count
             if len(mantis_issues):
                 go_on = True
-                target.importIssues(project_id, name + " Assignees",
-                    [to_yt_issue(issue, project_id, target) for issue in mantis_issues])
+                issue_list = [to_yt_issue(issue, project_id, target) for issue in mantis_issues]
+                if mantis.UPDATE_EXISTING:
+                    updateExistingIssues(issue_list, project_id, target, name)
+                else:
+                    target.importIssues(project_id, name + " Assignees", issue_list)
 
                 # import attachments
                 for issue in mantis_issues:
@@ -460,6 +466,70 @@ def mantis2youtrack(target_url, target_login, target_pass, mantis_db_name, manti
         print target.importLinks(yt_issue_links)
 
     print "Importing issue links finished"
+
+def updateExistingIssues(issue_list, project_id, target, name):
+    for issue in issue_list:
+        print "Checking For Issue %s-%s" % (project_id, issue[u"numberInProject"])
+        try:
+            existingIssue = target.getIssue(project_id + "-" + issue[u"numberInProject"])
+        except YouTrackException as e:
+            print "Creating New Issue %s-%s" % (project_id, issue[u"numberInProject"])
+            target.importIssues(project_id, name + name + " Assignees", [issue])
+            pass
+            continue
+
+        updatedFields = {}
+
+        for field in issue:
+            fieldName = field
+            if field in existingIssue and existingIssue[field] == issue[field]:
+                continue
+            elif field == "comments" or field == "updated":
+                continue
+            elif field == "Spent time" or field == "Estimation":
+                issue[field] = issue[field].lower()
+
+                replacements = {
+                    u" ": u"",
+                    u"day" : u"d",
+                    u"hour": u"h",
+                    u"hr":u"h",
+                    u"minute" : u"m",
+                    u"min":u"m",
+                    u"week":u"w",
+                    u"s": u""
+                }
+
+                for replacement in replacements:
+                    issue[field] = issue[field].replace(replacement, replacements[replacement])
+
+            updatedFields[fieldName] = issue[field]
+
+        print "Updating Issue %s-%s" % (project_id, issue[u"numberInProject"])
+        target.updateIssue(existingIssue, updatedFields)
+
+        if "Spent time" in updatedFields and "Assignee" in existingIssue:
+            currentMinutes = getCurrentTotal(existingIssue["id"], target)
+            totalMinutes   = int(period_to_minutes(issue["Spent time"]))
+            if (totalMinutes - currentMinutes) > 0:
+                target.importWorkItems(existingIssue["id"], [createWorkItem((totalMinutes - currentMinutes), existingIssue)])
+
+def getCurrentTotal(issueId, target):
+    workItems = target.getWorkItems(issueId)
+    totalTime = 0
+
+    for workItem in workItems:
+        totalTime = totalTime + int(workItem.duration)
+
+    return totalTime
+
+def createWorkItem(durationAmount, issue):
+    work_item = WorkItem()
+    work_item.authorLogin = issue["Assignee"]
+    work_item.date = issue["updated"]
+    work_item.duration = durationAmount
+    work_item.worktype = "Mantis Import"
+    return work_item
 
 if __name__ == "__main__":
     main()

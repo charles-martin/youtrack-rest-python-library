@@ -3,8 +3,10 @@ LINK_TYPES = dict([])
 CREATE_CF_FOR_SUBPROJECT = True
 CHARSET = "cp866"
 FIELD_NAMES = dict([])
+IGNORED_FIELDS = dict([])
 FIELD_TYPES = dict([])
 FIELD_VALUES = dict([])
+UPDATE_EXISTING = False
 
 class MantisUser(object) :
 
