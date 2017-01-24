@@ -126,17 +126,12 @@ class Connection(object):
     def updateIssue(self, issue, updatedFields):
         command = ""
         for field in updatedFields:
-            fieldName = field
             if field == "description" or field == "summary" or field == "Spent time":
                 continue
 
-            print field + ":" + fieldName
             command = command + " " + field + " " + updatedFields[field]
 
-        update = {}
-        update['command'] = command
-
-        return self._req('POST', '/issue/' + issue['id'] + '/execute', urllib.urlencode(update), content_type='application/x-www-form-urlencoded')
+        return self.executeCommand(issue["id"], command)
 
     def createIssue(self, project, assignee, summary, description, priority=None, type=None, subsystem=None, state=None,
                     affectsVersion=None,

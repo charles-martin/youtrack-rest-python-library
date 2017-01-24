@@ -266,8 +266,23 @@ def add_values_to_fields(connection, project_id, mantis_field_name, values, mant
 
 
 def import_attachments(issue_attachments, issue_id, target):
+    try:
+        current_attachments = target.getAttachments(issue_id)
+    except YouTrackException:
+        current_attachments = {}
+        pass
+
     for attachment in issue_attachments:
         print "Processing issue attachment [ %s ]" % str(attachment.id)
+        skip_attachment = False
+        for existing_attachment in current_attachments:
+            if existing_attachment.name == attachment.filename:
+                skip_attachment = True
+                break
+
+        if skip_attachment:
+            continue
+
         content = StringIO(attachment.content)
         author_login = "guest"
         if attachment.author is not None:
@@ -424,7 +439,7 @@ def mantis2youtrack(target_url, target_login, target_pass, mantis_db_name, manti
         print "Attaching custom fields to project [ %s ] finished" % project_id
 
         print "Importing issues to project [ %s ]" % project_id
-        max_count = 100
+        max_count = 10
         after = 0
         go_on = True
         while go_on:
@@ -439,12 +454,13 @@ def mantis2youtrack(target_url, target_login, target_pass, mantis_db_name, manti
                 else:
                     target.importIssues(project_id, name + " Assignees", issue_list)
 
-                # import attachments
-                for issue in mantis_issues:
-                    issue_attachments = client.get_attachments(issue['id'])
-                    issue_id = "%s-%s" % (project_id, issue['id'])
-                    import_attachments(issue_attachments, issue_id, target)
-                    issue_tags |= set(client.get_issue_tags_by_id(issue['id']))
+                if mantis.SKIP_ATTACHMENTS == False:
+                    # import attachments
+                    for issue in mantis_issues:
+                        issue_attachments = client.get_attachments(issue['id'])
+                        issue_id = "%s-%s" % (project_id, issue['id'])
+                        import_attachments(issue_attachments, issue_id, target)
+                        issue_tags |= set(client.get_issue_tags_by_id(issue['id']))
 
         print "Importing issues to project [ %s ] finished" % project_id
 
@@ -484,7 +500,7 @@ def updateExistingIssues(issue_list, project_id, target, name):
             fieldName = field
             if field in existingIssue and existingIssue[field] == issue[field]:
                 continue
-            elif field == "comments" or field == "updated":
+            elif field == "comments" or field == "updated" or field == "reporterName":
                 continue
             elif field == "Spent time" or field == "Estimation":
                 issue[field] = issue[field].lower()
@@ -502,6 +518,15 @@ def updateExistingIssues(issue_list, project_id, target, name):
 
                 for replacement in replacements:
                     issue[field] = issue[field].replace(replacement, replacements[replacement])
+            elif field == "State":
+                if existingIssue[field] == "In Progress" and issue[field] == "Open":
+                    issue[field] = "In Progress"
+                elif existingIssue[field] == "Fixed" and issue[field] == "Open":
+                    issue[field] = "Fixed"
+                elif existingIssue[field] == "Verified" and issue[field] == "Fixed":
+                    issue[field] = "Verified"
+                elif existingIssue[field] == "Closed" and issue[field] == "Verified":
+                    issue[field] = "Closed"
 
             updatedFields[fieldName] = issue[field]
 
@@ -513,6 +538,30 @@ def updateExistingIssues(issue_list, project_id, target, name):
             totalMinutes   = int(period_to_minutes(issue["Spent time"]))
             if (totalMinutes - currentMinutes) > 0:
                 target.importWorkItems(existingIssue["id"], [createWorkItem((totalMinutes - currentMinutes), existingIssue)])
+
+        if ("comments" in issue):
+            updateComments(existingIssue["id"], target, issue["comments"])
+
+def updateComments(issueId, target, allComments):
+    existingComments = target.getComments(issueId)
+
+    for oldComment in allComments:
+        commentFound = False
+        old_comment  = oldComment["text"].replace("\r", "").replace("\n", "")
+
+        for newComment in existingComments:
+            new_comment = newComment["text"].replace("\r", "").replace("\n", "")
+
+            if new_comment == old_comment:
+                commentFound = True
+                break
+
+        if (commentFound == False):
+            try:
+                target.executeCommand(issueId, 'comment', oldComment["text"], None, oldComment["author"], disable_notifications=True)
+            except YouTrackException:
+                target.executeCommand(issueId, 'comment', oldComment["author"] + ": " + oldComment["text"], None, None, disable_notifications=True)
+                pass
 
 def getCurrentTotal(issueId, target):
     workItems = target.getWorkItems(issueId)

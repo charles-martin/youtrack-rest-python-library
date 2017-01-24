@@ -7,6 +7,7 @@ IGNORED_FIELDS = dict([])
 FIELD_TYPES = dict([])
 FIELD_VALUES = dict([])
 UPDATE_EXISTING = False
+SKIP_ATTACHMENTS = False
 
 class MantisUser(object) :
 
