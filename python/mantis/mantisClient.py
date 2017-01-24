@@ -121,6 +121,10 @@ class MantisClient(object):
         date_submitted_row = "date_submitted"
         due_date_row = "due_date"
         last_updated_row = "last_updated"
+        query_order = "ASC"
+
+        if mantis.QUERY_ORDER_DESC == True:
+            query_order = "DESC"
 
         rows_to_retrieve = [id_row, project_id_row, reporter_id_row, handler_id_row, bug_text_id_row, "summary",
                             category_id_row, date_submitted_row, due_date_row, last_updated_row, "priority", "severity",
@@ -129,8 +133,8 @@ class MantisClient(object):
 
 
 
-        request = "SELECT %s FROM mantis_bug_table WHERE project_id IN %s LIMIT %d OFFSET %d" % (
-            ", ".join(rows_to_retrieve), project_ids, max, after)
+        request = "SELECT %s FROM mantis_bug_table WHERE project_id IN %s AND id >= %d ORDER BY id %s LIMIT %d OFFSET %d" % (
+            ", ".join(rows_to_retrieve), project_ids, mantis.QUERY_MINIMUM_ID, query_order, max, after)
         cursor.execute(request)
         result = []
         for row in cursor:

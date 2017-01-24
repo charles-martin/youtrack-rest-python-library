@@ -8,6 +8,8 @@ FIELD_TYPES = dict([])
 FIELD_VALUES = dict([])
 UPDATE_EXISTING = False
 SKIP_ATTACHMENTS = False
+QUERY_MINIMUM_ID = 0
+QUERY_ORDER_DESC = False
 
 class MantisUser(object) :
 
