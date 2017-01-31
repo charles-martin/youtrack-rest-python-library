@@ -531,16 +531,22 @@ def updateExistingIssues(issue_list, project_id, target, name):
             updatedFields[fieldName] = issue[field]
 
         print "Updating Issue %s-%s" % (project_id, issue[u"numberInProject"])
-        target.updateIssue(existingIssue, updatedFields)
 
-        if "Spent time" in updatedFields and "Assignee" in existingIssue:
-            currentMinutes = getCurrentTotal(existingIssue["id"], target)
-            totalMinutes   = int(period_to_minutes(issue["Spent time"]))
-            if (totalMinutes - currentMinutes) > 0:
-                target.importWorkItems(existingIssue["id"], [createWorkItem((totalMinutes - currentMinutes), existingIssue)])
+        try:
+            target.updateIssue(existingIssue, updatedFields)
 
-        if ("comments" in issue):
-            updateComments(existingIssue["id"], target, issue["comments"])
+            if "Spent time" in updatedFields and "Assignee" in existingIssue:
+                currentMinutes = getCurrentTotal(existingIssue["id"], target)
+                totalMinutes   = int(period_to_minutes(issue["Spent time"]))
+                if (totalMinutes - currentMinutes) > 0:
+                    target.importWorkItems(existingIssue["id"], [createWorkItem((totalMinutes - currentMinutes), existingIssue)])
+
+            if ("comments" in issue):
+                updateComments(existingIssue["id"], target, issue["comments"])
+        except YouTrackException as e:
+            print "Error Updating Ticket:"
+            print e
+            pass
 
 def updateComments(issueId, target, allComments):
     existingComments = target.getComments(issueId)
