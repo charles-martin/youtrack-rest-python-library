@@ -11,6 +11,7 @@ import mantis.defaultMantis
 from StringIO import StringIO
 from youtrack.importHelper import *
 import youtrack.importHelper
+import re
 
 def main():
     target_url, target_login, target_pass, mantis_db, mantis_host, mantis_port, mantis_login, mantis_pass = sys.argv[
@@ -439,7 +440,7 @@ def mantis2youtrack(target_url, target_login, target_pass, mantis_db_name, manti
         print "Attaching custom fields to project [ %s ] finished" % project_id
 
         print "Importing issues to project [ %s ]" % project_id
-        max_count = 10
+        max_count = 1
         after = 0
         go_on = True
         while go_on:
@@ -476,10 +477,14 @@ def mantis2youtrack(target_url, target_login, target_pass, mantis_db_name, manti
         yt_issue_links = []
         for link in mantis_issue_links:
             go_on = True
-            print "Processing issue link for source issue [ %s ]" % str(link.source)
-            yt_issue_links.append(to_yt_link(link))
-        after += max_count
-        print target.importLinks(yt_issue_links)
+            try:
+                print "Processing issue link for source issue [ %s ]" % str(link.source)
+                yt_issue_links.append(to_yt_link(link))
+                after += max_count
+                print target.importLinks(yt_issue_links)
+            except YouTrackException as e:
+                pass
+                continue
 
     print "Importing issue links finished"
 
@@ -553,10 +558,10 @@ def updateComments(issueId, target, allComments):
 
     for oldComment in allComments:
         commentFound = False
-        old_comment  = oldComment["text"].replace("\r", "").replace("\n", "")
+        old_comment = re.sub(r'[^a-zA-Z]', '', oldComment['text'].replace(oldComment["author"] + ": ", ""))
 
         for newComment in existingComments:
-            new_comment = newComment["text"].replace("\r", "").replace("\n", "")
+            new_comment = re.sub(r'[^a-zA-Z]', '', newComment['text'])
 
             if new_comment == old_comment:
                 commentFound = True
